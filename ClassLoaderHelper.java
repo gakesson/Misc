@@ -29,6 +29,8 @@ public final class ClassLoaderHelper {
 	 * Writes all currently loaded classes by the provided {@link ClassLoader}
 	 * into the file in the specified file path.
 	 * 
+	 * This method does not raise any kind of {@link Throwable}.
+	 * 
 	 * @param absoluteFilePath
 	 * @param classLoader
 	 */
@@ -62,8 +64,10 @@ public final class ClassLoaderHelper {
 	}
 
 	/**
-	 * Loads all classes (fully qualified names) from the file with the
-	 * specified file path.
+	 * Loads all classes (fully qualified names) into the provided
+	 * {@link ClassLoader} from the file with the specified file path.
+	 * 
+	 * This method does not raise any kind of {@link Throwable}.
 	 * 
 	 * @param absoluteFilePath
 	 * @param classLoader
@@ -112,21 +116,19 @@ public final class ClassLoaderHelper {
 		List<Class<?>> loadedClasses = Collections.emptyList();
 
 		try {
-			loadedClasses = getLoadedClassesOrNull(classLoader,
+			loadedClasses = getLoadedClassesOrDefault(classLoader,
 					classLoader.getClass());
-			loadedClasses = Collections.unmodifiableList(new ArrayList<>(
-					loadedClasses));
 		} catch (Throwable t) {
 			// Silent ignore
 		}
 
-		return loadedClasses;
+		return Collections.unmodifiableList(new ArrayList<>(loadedClasses));
 	}
 
 	@SuppressWarnings("unchecked") // Whatever
-	private static Vector<Class<?>> getLoadedClassesOrNull(
+	private static List<Class<?>> getLoadedClassesOrDefault(
 			ClassLoader classLoader, Class<?> classToSearchIn) {
-		Vector<Class<?>> loadedClasses = null;
+		List<Class<?>> loadedClasses = Collections.emptyList();
 
 		if (classToSearchIn != null) {
 
@@ -137,7 +139,7 @@ public final class ClassLoaderHelper {
 				loadedClasses = (Vector<Class<?>>) loadedClassesField
 						.get(classLoader);
 			} catch (NoSuchFieldException | IllegalAccessException e) {
-				loadedClasses = getLoadedClassesOrNull(classLoader,
+				loadedClasses = getLoadedClassesOrDefault(classLoader,
 						classToSearchIn.getSuperclass());
 			}
 		}
