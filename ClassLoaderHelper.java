@@ -12,25 +12,47 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Vector;
 
+/**
+ * This class is a helper for pre-loading classes in order to reduce time for
+ * JVM to reach steady state.
+ * 
+ * @author Gustav Åkesson - gustav.r.akesson@gmail.com
+ *
+ */
 public final class ClassLoaderHelper {
 
 	private ClassLoaderHelper() {
 		// Nothing
 	}
 
+	/**
+	 * Writes all currently loaded classes by the provided {@link ClassLoader}
+	 * into the file in the specified file path.
+	 * 
+	 * @param absoluteFilePath
+	 * @param classLoader
+	 */
 	public static void writeLoadedClassesToFile(String absoluteFilePath,
-			List<Class<?>> loadedClasses) {
+			ClassLoader classLoader) {
 
 		try {
+			List<Class<?>> loadedClasses = ClassLoaderHelper
+					.getLoadedClassesOrDefault(classLoader);
 			File file = new File(absoluteFilePath);
 
 			try (BufferedOutputStream outputStream = new BufferedOutputStream(
 					new FileOutputStream(file), 1024 * 1024)) {
 				byte[] lineSeparator = System.lineSeparator().getBytes(
 						StandardCharsets.UTF_8);
+
+				outputStream
+						.write("# This file contains classes to load for a particular JVM process"
+								.getBytes(StandardCharsets.UTF_8));
+				outputStream.write(lineSeparator);
+
 				for (Class<?> loadedClass : loadedClasses) {
-					outputStream.write(loadedClass.getName().trim().getBytes(
-							StandardCharsets.UTF_8));
+					outputStream.write(loadedClass.getName().trim()
+							.getBytes(StandardCharsets.UTF_8));
 					outputStream.write(lineSeparator);
 				}
 			}
@@ -39,50 +61,45 @@ public final class ClassLoaderHelper {
 		}
 	}
 
+	/**
+	 * Loads all classes (fully qualified names) from the file with the
+	 * specified file path.
+	 * 
+	 * @param absoluteFilePath
+	 * @param classLoader
+	 */
 	public static void loadClassesFromFile(String absoluteFilePath,
 			ClassLoader classLoader) {
 
 		try {
 			File file = new File(absoluteFilePath);
-			List<String> classesToLoad = new ArrayList<>();
 
-			try (BufferedReader inputStream = new BufferedReader(
-					new FileReader(file))) {
+			if (file.exists()) {
+				try (BufferedReader inputStream = new BufferedReader(
+						new FileReader(file))) {
 
-				String classToLoad = inputStream.readLine();
+					String classToLoad = inputStream.readLine();
 
-				while (classToLoad != null) {
-					classesToLoad.add(classToLoad.trim());
-					classToLoad = inputStream.readLine();
+					while (classToLoad != null) {
+						if (!classToLoad.startsWith("#")) {
+							loadClass(classToLoad.trim(), classLoader);
+						}
+						classToLoad = inputStream.readLine();
+					}
 				}
 			}
-
-			loadClasses(classesToLoad, classLoader);
 		} catch (Throwable t) {
 			// Silent ignore
 		}
 	}
 
-	/**
-	 * Loads the provided list of classes (fully qualified names) using
-	 * {@link Class#forName(String, boolean, ClassLoader)}, i.e. by also
-	 * initializing the class.
-	 * 
-	 * This method does not raise any kind of {@link Throwable}.
-	 * 
-	 * @param classesToLoad
-	 * @param classLoader
-	 */
-	public static void loadClasses(List<String> classesToLoad,
-			ClassLoader classLoader) {
+	private static void loadClass(String classToLoad, ClassLoader classLoader) {
 
 		try {
-			for (String classToLoad : classesToLoad) {
-				try {
-					Class.forName(classToLoad, true, classLoader);
-				} catch (ClassNotFoundException e) {
-					// Silent ignore
-				}
+			try {
+				Class.forName(classToLoad, true, classLoader);
+			} catch (LinkageError | ClassNotFoundException e) {
+				// Silent ignore
 			}
 
 		} catch (Throwable t) {
@@ -90,17 +107,7 @@ public final class ClassLoaderHelper {
 		}
 	}
 
-	/**
-	 * Returns an unmodifiable view of the currently loaded classes by the
-	 * provided {@link ClassLoader}, or {@link Collections#EMPTY_LIST} in case
-	 * it was not possible to retrieve due to e.g. an error.
-	 * 
-	 * This method does not raise any kind of {@link Throwable}.
-	 * 
-	 * @param classLoader
-	 * @return
-	 */
-	public static List<Class<?>> getLoadedClassesOrDefault(
+	private static List<Class<?>> getLoadedClassesOrDefault(
 			ClassLoader classLoader) {
 		List<Class<?>> loadedClasses = Collections.emptyList();
 
@@ -116,8 +123,7 @@ public final class ClassLoaderHelper {
 		return loadedClasses;
 	}
 
-	@SuppressWarnings("unchecked")
-	// Whatever
+	@SuppressWarnings("unchecked") // Whatever
 	private static Vector<Class<?>> getLoadedClassesOrNull(
 			ClassLoader classLoader, Class<?> classToSearchIn) {
 		Vector<Class<?>> loadedClasses = null;
